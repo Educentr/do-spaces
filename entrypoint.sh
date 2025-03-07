@@ -71,9 +71,9 @@ else
   CF_URL='/'
 fi
 
-$NO_CHECK_MD5="--no-check-md5"
+NO_CHECK_MD5="--no-check-md5"
 if [ -z "$DO_CHECK_MD5" ]; then
-  $NO_CHECK_MD5=""
+  NO_CHECK_MD5=""
 fi
 
 ENDPOINT="$DO_REGION.digitaloceanspaces.com"
