@@ -45,6 +45,7 @@ jobs:
         uses: laukstein/do-spaces@main
         env:
           DO_TOKEN: ${{ secrets.DO_TOKEN }}
+          DO_CDN_ID: ${{ secrets.DO_CDN_ID }}
           DO_ACCESS: ${{ secrets.DO_ACCESS }}
           DO_SECRET: ${{ secrets.DO_SECRET }}
           DO_NAME: ${{ secrets.DO_NAME }}
@@ -96,6 +97,8 @@ jobs:
 | `FILES_PRIVATE` | Make files private, default `false`. | `env` | No | `false` |
 | `ADD_HEADER` | Add custom header e.g. `Content-Encoding:gzip`. [See supported headers.](https://docs.digitalocean.com/products/spaces/how-to/set-file-metadata/) | `env` | No | N/A |
 | `DO_TOKEN` | Personal access token with Write scope, required only to purge DigitalOcean CDN. [See details.](https://docs.digitalocean.com/reference/api/create-personal-access-token/)  | `secret env` | No | N/A |
+| `DO_CDN_ID` | CDN ID for purge cache. Required if DO_TOKEN exists | `env` | No* | N/A |
+| `DO_CHECK_MD5` | Check MD5 | `env` | No | N/A |
 
 #### Cloudflare purge cache variables
 

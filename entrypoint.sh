@@ -22,6 +22,11 @@ if [ -z "$DO_REGION" ]; then
   exit 1
 fi
 
+if [ -z "$DO_CDN_ID" ]; then
+  echo 'DO_CDN_ID is not set. Quitting.'
+  exit 1
+fi
+
 if [ -n "$CF_TOKEN" ] && [ -z "$CF_ZONE" ]; then
   echo 'CF_ZONE is not set. Skipping purge Cloudflare cache.'
 fi
@@ -66,6 +71,11 @@ else
   CF_URL='/'
 fi
 
+$NO_CHECK_MD5="--no-check-md5"
+if [ -z "$DO_CHECK_MD5" ]; then
+  $NO_CHECK_MD5=""
+fi
+
 ENDPOINT="$DO_REGION.digitaloceanspaces.com"
 cat >> "$HOME/.s3cfg" <<CONFIG
 access_key = ${DO_ACCESS}
@@ -76,7 +86,7 @@ host_bucket = %(bucket).${ENDPOINT}
 CONFIG
 
 S3="s3://$DO_NAME/"
-UPDATES=$(s3cmd --no-preserve --no-check-md5 --no-progress --recursive --exclude=.git $DELETE_FLAG $ACCESS_FLAG $HEADER_FLAG sync $LOCAL_DIR $S3$DO_DIR)
+UPDATES=$(s3cmd --delete-after --no-preserve $NO_CHECK_MD5 --no-progress --recursive --exclude=.git $DELETE_FLAG $ACCESS_FLAG $HEADER_FLAG sync $LOCAL_DIR $S3$DO_DIR)
 DO_FILES=''
 CF_URLS=''
 echo 'Changes successfully updated in DigitalOcean Space:'
@@ -103,39 +113,25 @@ for file in ${CHANGES}; do
 done
 
 if [ -n "$DO_TOKEN" ]; then
-  HTTP_RESPONSE=$(curl -sS -X GET \
+  HTTP_RESPONSE=$(curl -sS -X DELETE \
     -H 'Content-Type: application/json' \
     -H "Authorization: Bearer $DO_TOKEN" \
+    -d '{"files": ['"$DO_FILES"']}' \
     -w "HTTP_STATUS:%{http_code}" \
-    'https://api.digitalocean.com/v2/cdn/endpoints')
-  HTTP_STATUS=$(echo "${HTTP_RESPONSE}" | tr -d '\n' | sed -E 's/.*HTTP_STATUS:([0-9]{3})$/\1/')
-  HTTP_BODY=$(echo "${HTTP_RESPONSE}" | sed -E 's/HTTP_STATUS\:[0-9]{3}$//')
-  ENDPOINT_ID=$(echo "$HTTP_BODY" | jq -r '.endpoints[0].id')
+    "https://api.digitalocean.com/v2/cdn/endpoints/$DO_CDN_ID/cache")
+  HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tr -d '\n' | sed -E 's/.*HTTP_STATUS:([0-9]{3})$/\1/')
+  HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed -E 's/HTTP_STATUS\:[0-9]{3}$//')
 
-  if [ "$ENDPOINT_ID" != 'null' ]; then
-    HTTP_RESPONSE=$(curl -sS -X DELETE \
-      -H 'Content-Type: application/json' \
-      -H "Authorization: Bearer $DO_TOKEN" \
-      -d '{"files": ['"$DO_FILES"']}' \
-      -w "HTTP_STATUS:%{http_code}" \
-      "https://api.digitalocean.com/v2/cdn/endpoints/$ENDPOINT_ID/cache")
-    HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tr -d '\n' | sed -E 's/.*HTTP_STATUS:([0-9]{3})$/\1/')
-    HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed -E 's/HTTP_STATUS\:[0-9]{3}$//')
+  if [ "$HTTP_STATUS" = '200' ] || [ "$HTTP_STATUS" = '204' ]; then
+      echo 'Changes successfully purged from DigitalOcean CDN:'
+      echo "$CHANGES"
 
-    if [ "$HTTP_STATUS" = '200' ] || [ "$HTTP_STATUS" = '204' ]; then
-        echo 'Changes successfully purged from DigitalOcean CDN:'
-        echo "$CHANGES"
-
-        if [ -z "$CF_ENABLED" ]; then
-          exit 0
-        fi
-    else
-        echo 'DigitalOcean CDN purge failed. API response:'
-        echo "$HTTP_BODY"
-    fi
+      if [ -z "$CF_ENABLED" ]; then
+        exit 0
+      fi
   else
-    echo 'Failed to fetch DigitalOcean endpoints. API response:'
-    echo "$HTTP_BODY"
+      echo 'DigitalOcean CDN purge failed. API response:'
+      echo "$HTTP_BODY"
   fi
   if [ -z "$CF_ENABLED" ]; then
     exit 1
